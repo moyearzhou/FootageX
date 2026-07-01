@@ -1,0 +1,15 @@
+.DS_Store
+node_modules/
+npm-debug.log*
+
+# Local runtime data and secrets
+outputs/
+work/
+*.local
+
+# Historical scratch app copy from the Codex workspace
+video-workbench/
+
+# Python caches
+__pycache__/
+*.pyc

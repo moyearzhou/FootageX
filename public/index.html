@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>视频 AI 整理工作台</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div>
+            <h1>视频整理</h1>
+            <p id="scanMeta">加载中</p>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div><span id="totalVideos">0</span><label>视频</label></div>
+          <div><span id="totalSize">0 GB</span><label>总量</label></div>
+          <div><span id="reviewedCount">0</span><label>已标记</label></div>
+        </div>
+
+        <div class="control">
+          <label for="searchInput">搜索</label>
+          <input id="searchInput" type="search" placeholder="目录、文件名、事件" />
+        </div>
+        <div class="control">
+          <label for="deviceFilter">设备</label>
+          <select id="deviceFilter"></select>
+        </div>
+        <div class="control">
+          <label for="statusFilter">状态</label>
+          <select id="statusFilter">
+            <option value="">全部</option>
+            <option value="unreviewed">未标记</option>
+            <option value="keep">保留</option>
+            <option value="cut">剪片段</option>
+            <option value="archive">归档</option>
+            <option value="delete_candidate">待删观察</option>
+          </select>
+        </div>
+        <div class="control">
+          <label for="sortMode">排序</label>
+          <select id="sortMode">
+            <option value="size_desc">体积从大到小</option>
+            <option value="modified_desc">最近修改</option>
+            <option value="event_asc">事件</option>
+            <option value="rating_desc">评分</option>
+          </select>
+        </div>
+
+        <div class="queue" id="videoList"></div>
+      </aside>
+
+      <main class="main">
+        <section class="viewer">
+          <div class="viewerTop">
+            <div>
+              <h2 id="videoTitle">选择一个视频</h2>
+              <p id="videoPath">从左侧队列开始，优先处理最大的文件。</p>
+            </div>
+            <div class="badgeRow">
+              <span id="videoSize" class="badge">-</span>
+              <span id="videoEvent" class="badge">-</span>
+              <span id="videoDevice" class="badge">-</span>
+            </div>
+          </div>
+
+          <video id="player" controls preload="none"></video>
+
+          <div class="toolbar">
+            <button id="loadVideoBtn" type="button">加载视频</button>
+            <button id="captureSheetBtn" type="button">生成缩略总览</button>
+            <button id="addSegmentBtn" type="button">记录当前片段</button>
+            <button id="openOriginalBtn" type="button">在新标签预览</button>
+          </div>
+
+          <div class="sheet" id="contactSheet">
+            <div class="empty">选择视频后可生成缩略总览</div>
+          </div>
+        </section>
+
+        <section class="review">
+          <div class="immichPanel">
+            <div class="reviewHeader">
+              <h3>Immich 素材库</h3>
+              <span id="immichState">未配置</span>
+            </div>
+            <label class="notesLabel" for="immichBaseUrlInput">Immich 地址</label>
+            <input id="immichBaseUrlInput" type="url" placeholder="http://nas.local:2283" />
+            <label class="notesLabel" for="immichApiKeyInput">API Key</label>
+            <input id="immichApiKeyInput" type="password" placeholder="只保存在本地工作区" />
+            <div class="immichActions">
+              <button id="saveImmichBtn" type="button">保存配置</button>
+              <button id="syncImmichBtn" type="button">同步 Immich 视频</button>
+            </div>
+            <button id="openSavedImmichBtn" type="button">在 Immich 打开当前视频</button>
+          </div>
+
+          <div class="aiPanel">
+            <div class="reviewHeader">
+              <h3>AI 分析</h3>
+              <span id="aiState">未分析</span>
+            </div>
+            <label class="notesLabel" for="openAiApiKeyInput">OpenAI API Key</label>
+            <input id="openAiApiKeyInput" type="password" placeholder="只保存在本地工作区" />
+            <label class="notesLabel" for="openAiBaseUrlInput">OpenAI Base URL</label>
+            <input id="openAiBaseUrlInput" type="url" placeholder="https://aiapi.zotpaper.cn/v1" />
+            <label class="notesLabel" for="openAiModelInput">模型</label>
+            <input id="openAiModelInput" type="text" placeholder="gpt-5.4-mini" />
+            <div class="immichActions">
+              <button id="saveOpenAiBtn" type="button">保存 Key</button>
+              <button id="testOpenAiBtn" type="button">检测模型</button>
+            </div>
+            <div class="immichActions">
+              <button id="analyzeCurrentBtn" type="button">AI 分析当前视频</button>
+            </div>
+            <div id="aiResult" class="aiResult">
+              <div class="empty">当前视频还没有 AI 分析结果</div>
+            </div>
+          </div>
+
+          <div class="reviewHeader">
+            <h3>整理判断</h3>
+            <span id="saveState">未保存</span>
+          </div>
+
+          <div class="statusButtons" id="statusButtons">
+            <button data-status="keep">保留</button>
+            <button data-status="cut">剪片段</button>
+            <button data-status="archive">归档</button>
+            <button data-status="delete_candidate">待删观察</button>
+          </div>
+
+          <div class="rating" id="ratingButtons">
+            <button data-rating="1">1</button>
+            <button data-rating="2">2</button>
+            <button data-rating="3">3</button>
+            <button data-rating="4">4</button>
+            <button data-rating="5">5</button>
+          </div>
+
+          <div class="tagGrid" id="tagGrid"></div>
+
+          <label class="notesLabel" for="notesInput">备注</label>
+          <textarea id="notesInput" rows="5" placeholder="比如：海边骑行 01:12-01:46 可做开场；前半段抖动"></textarea>
+
+          <div class="segments">
+            <div class="segmentsTop">
+              <h3>片段清单</h3>
+              <button id="clearSegmentsBtn" type="button">清空</button>
+            </div>
+            <div id="segmentList" class="segmentList"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
