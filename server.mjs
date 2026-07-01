@@ -98,10 +98,22 @@ function saveSettings(settings, { preserveSecret = true } = {}) {
 
 function mergedInventory() {
   const inventory = loadInventory();
-  if (!inventory) return null;
+  const settings = loadSettings();
+  if (!inventory) {
+    return {
+      root: "",
+      source: "empty",
+      generatedAt: "",
+      totalVideos: 0,
+      totalSize: 0,
+      totalSizeHuman: "0 B",
+      errors: [],
+      settings: publicSettings(settings),
+      videos: [],
+    };
+  }
   const reviews = loadReviews();
   const aiReviews = loadAiReviews();
-  const settings = loadSettings();
   return {
     ...inventory,
     settings: publicSettings(settings),
@@ -551,10 +563,6 @@ const server = createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname === "/api/inventory") {
     const inventory = mergedInventory();
-    if (!inventory) {
-      json(res, 404, { error: "Run scan_videos.py first to create outputs/video_workbench/video_inventory.json" });
-      return;
-    }
     json(res, 200, inventory);
     return;
   }

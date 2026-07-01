@@ -24,6 +24,7 @@ const el = {
   videoDevice: document.querySelector("#videoDevice"),
   player: document.querySelector("#player"),
   loadVideoBtn: document.querySelector("#loadVideoBtn"),
+  unloadVideoBtn: document.querySelector("#unloadVideoBtn"),
   captureSheetBtn: document.querySelector("#captureSheetBtn"),
   addSegmentBtn: document.querySelector("#addSegmentBtn"),
   openOriginalBtn: document.querySelector("#openOriginalBtn"),
@@ -160,8 +161,8 @@ async function saveReview(video) {
 
 function renderStats() {
   const reviewed = state.videos.filter((video) => (video.reviewStatus || "unreviewed") !== "unreviewed").length;
-  el.totalVideos.textContent = state.inventory.totalVideos.toLocaleString("zh-CN");
-  el.totalSize.textContent = state.inventory.totalSizeHuman;
+  el.totalVideos.textContent = (state.inventory?.totalVideos || 0).toLocaleString("zh-CN");
+  el.totalSize.textContent = state.inventory?.totalSizeHuman || "0 B";
   el.reviewedCount.textContent = reviewed.toLocaleString("zh-CN");
 }
 
@@ -217,14 +218,18 @@ function selectVideo(id) {
   el.videoSize.textContent = video.sizeHuman;
   el.videoEvent.textContent = video.event;
   el.videoDevice.textContent = video.device;
-  el.player.pause();
-  el.player.removeAttribute("src");
-  el.player.load();
+  unloadVideo();
   el.contactSheet.innerHTML = `<div class="empty">点击“生成缩略总览”抽取当前视频画面</div>`;
   renderReview(video);
   renderImmich(video);
   renderAi(video);
   renderList();
+}
+
+function unloadVideo() {
+  el.player.pause();
+  el.player.removeAttribute("src");
+  el.player.load();
 }
 
 async function loadVideoForCurrent() {
@@ -376,12 +381,29 @@ async function init() {
   state.inventory = await response.json();
   state.videos = state.inventory.videos;
   state.settings = state.inventory.settings || state.settings;
-  el.scanMeta.textContent = `${state.inventory.root} · ${state.inventory.generatedAt}`;
+  el.scanMeta.textContent = state.inventory.root
+    ? `${state.inventory.root} · ${state.inventory.generatedAt}`
+    : "首次运行：配置 Immich 后同步视频";
   renderStats();
   renderFilters();
   applyFilters();
   renderImmich(null);
-  if (state.videos.length) selectVideo(state.videos[0].id);
+  if (state.videos.length) {
+    selectVideo(state.videos[0].id);
+  } else {
+    state.current = null;
+    el.videoTitle.textContent = "还没有视频";
+    el.videoPath.textContent = "在右侧填写 Immich 地址和 API Key，然后点击“同步 Immich 视频”。";
+    el.videoSize.textContent = "0 B";
+    el.videoEvent.textContent = "待同步";
+    el.videoDevice.textContent = "Immich";
+    el.player.pause();
+    el.player.removeAttribute("src");
+    el.player.load();
+    el.contactSheet.innerHTML = `<div class="empty">同步后会在这里预览视频</div>`;
+    renderReview({ reviewStatus: "unreviewed", rating: 0, tags: [], notes: "", segments: [] });
+    renderAi(null);
+  }
 }
 
 [el.searchInput, el.deviceFilter, el.statusFilter, el.sortMode].forEach((input) => {
@@ -456,6 +478,11 @@ el.loadVideoBtn.addEventListener("click", async () => {
       el.loadVideoBtn.textContent = "加载视频";
     }, 1200);
   }
+});
+
+el.unloadVideoBtn.addEventListener("click", () => {
+  unloadVideo();
+  el.contactSheet.innerHTML = `<div class="empty">视频已卸载，点击“加载视频”后再播放或抽帧</div>`;
 });
 
 el.captureSheetBtn.addEventListener("click", captureContactSheet);

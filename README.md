@@ -15,6 +15,7 @@ FootageX is a local video triage workbench for Immich libraries. It helps review
 ## Quick Start
 
 ```bash
+npm run init
 npm start
 ```
 
@@ -32,6 +33,8 @@ Then configure:
 - OpenAI-compatible API Key
 - Model name
 
+Click `同步 Immich 视频` after saving the Immich settings. A fresh clone starts with an empty local inventory by design.
+
 Runtime data is written to:
 
 ```text
@@ -39,6 +42,35 @@ outputs/video_workbench/
 ```
 
 This directory is intentionally ignored by git because it may contain API keys, local inventories, review data, and media metadata.
+
+## Fresh Clone Checklist
+
+FootageX can start immediately on another device, but it cannot know your private services until you configure them.
+
+Required:
+
+- Node.js 20+
+- Network access to your Immich server
+- Immich API key
+
+Optional for AI analysis:
+
+- OpenAI-compatible Base URL
+- OpenAI-compatible API key
+- Vision-capable model name
+
+First run:
+
+```bash
+git clone git@github.com:moyearzhou/FootageX.git
+cd FootageX
+npm run init
+npm start
+```
+
+Then open `http://127.0.0.1:5173`, save settings, and sync Immich videos.
+
+No `npm install` is required right now because the app only uses Node.js built-in modules.
 
 ## Safety Notes
 

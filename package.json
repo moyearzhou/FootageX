@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "init": "node scripts/init.mjs",
     "start": "node server.mjs",
     "check": "node --check server.mjs"
   },
