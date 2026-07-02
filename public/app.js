@@ -54,6 +54,10 @@ const el = {
   aiState: document.querySelector("#aiState"),
   settingsAiState: document.querySelector("#settingsAiState"),
   aiResult: document.querySelector("#aiResult"),
+  exportBackupBtn: document.querySelector("#exportBackupBtn"),
+  importBackupBtn: document.querySelector("#importBackupBtn"),
+  backupFileInput: document.querySelector("#backupFileInput"),
+  backupState: document.querySelector("#backupState"),
 };
 
 function statusLabel(status) {
@@ -600,6 +604,58 @@ el.analyzeCurrentBtn.addEventListener("click", async () => {
     el.aiResult.innerHTML = `<div class="empty">${error.message}</div>`;
   } finally {
     el.analyzeCurrentBtn.disabled = !state.settings.hasOpenAiApiKey || !state.current;
+  }
+});
+
+
+el.exportBackupBtn.addEventListener("click", async () => {
+  el.backupState.textContent = "导出中";
+  try {
+    const response = await fetch("/api/backup");
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "导出失败");
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const disposition = response.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    link.href = url;
+    link.download = match?.[1] || `footagex-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    el.backupState.textContent = "已导出";
+  } catch (error) {
+    el.backupState.textContent = error.message || "导出失败";
+  }
+});
+
+el.importBackupBtn.addEventListener("click", () => {
+  el.backupFileInput.value = "";
+  el.backupFileInput.click();
+});
+
+el.backupFileInput.addEventListener("change", async () => {
+  const file = el.backupFileInput.files?.[0];
+  if (!file) return;
+  el.backupState.textContent = "导入中";
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    const response = await fetch("/api/backup/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "导入失败");
+    await init();
+    el.backupState.textContent = `已导入 · ${Number(result.totalVideos || 0).toLocaleString("zh-CN")} 个`;
+  } catch (error) {
+    el.backupState.textContent = error.message || "导入失败";
   }
 });
 

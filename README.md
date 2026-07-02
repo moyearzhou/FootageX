@@ -99,6 +99,33 @@ ports:
 
 Then open `http://<your-host-ip>:5174`.
 
+
+## Backup And Restore
+
+FootageX supports portable JSON backups for moving data between devices. Backups include settings, API keys, Immich inventory, manual reviews, and AI reviews.
+
+Treat backup files as sensitive because they include saved API keys.
+
+From the web UI:
+
+1. Open `设置`.
+2. Use `导出备份` on the source device.
+3. On the target device, deploy FootageX and use `导入备份` from the same settings dialog.
+
+For first-run automatic import on a new device, place the exported backup at:
+
+```text
+outputs/video_workbench/footagex_backup.json
+```
+
+Then start the stack:
+
+```bash
+docker compose up -d --build
+```
+
+If the MySQL database is empty, FootageX imports that backup automatically. After the first import, MySQL becomes the source of truth.
+
 ## Fresh Clone Checklist
 
 FootageX can start immediately on another device, but it cannot know your private services until you configure them.
@@ -126,7 +153,7 @@ npm start
 
 Then open `http://127.0.0.1:5173`, save settings, and sync Immich videos.
 
-No `npm install` is required right now because the app only uses Node.js built-in modules.
+For local non-Docker development, run `npm install` first because the server uses `mysql2`.
 
 ## Safety Notes
 

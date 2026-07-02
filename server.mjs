@@ -14,6 +14,7 @@ const reviewsPath = join(outputDir, "video_reviews.json");
 const aiReviewsPath = join(outputDir, "video_ai_reviews.json");
 const exportCsvPath = join(outputDir, "video_review_export.csv");
 const settingsPath = join(outputDir, "immich_settings.json");
+const backupImportPath = join(outputDir, "footagex_backup.json");
 
 const defaultSettings = { immichBaseUrl: "", immichApiKey: "", dataSource: "local", openAiApiKey: "", openAiBaseUrl: "https://aiapi.zotpaper.cn/v1", openAiModel: "gpt-5.4-mini" };
 const dbConfig = {
@@ -74,6 +75,11 @@ async function initDatabase() {
   `);
   const [[{ count }]] = await pool.query("SELECT COUNT(*) AS count FROM kv_store");
   if (Number(count) > 0) return;
+  if (existsSync(backupImportPath)) {
+    await importBackupPayload(readJsonFile(backupImportPath, null));
+    console.log(`Imported backup into MySQL: ${backupImportPath}`);
+    return;
+  }
   await saveStore("settings", readJsonFile(settingsPath, defaultSettings));
   const inventory = readJsonFile(inventoryPath, null);
   if (inventory) await saveStore("inventory", inventory);
@@ -139,6 +145,54 @@ async function saveSettings(settings, { preserveSecret = true } = {}) {
   };
   await saveStore("settings", safeSettings);
   return safeSettings;
+}
+
+async function createBackupPayload() {
+  const [settings, inventory, reviews, aiReviews] = await Promise.all([
+    loadSettings(),
+    loadInventory(),
+    loadReviews(),
+    loadAiReviews(),
+  ]);
+  return {
+    app: "FootageX",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    data: {
+      settings,
+      inventory,
+      reviews,
+      aiReviews,
+    },
+  };
+}
+
+function normalizeBackupPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("备份文件不是有效 JSON 对象");
+  }
+  const data = payload.data && typeof payload.data === "object" ? payload.data : payload;
+  return {
+    settings: data.settings || defaultSettings,
+    inventory: data.inventory || null,
+    reviews: data.reviews || {},
+    aiReviews: data.aiReviews || data.ai_reviews || {},
+  };
+}
+
+async function importBackupPayload(payload) {
+  const backup = normalizeBackupPayload(payload);
+  await saveStore("settings", backup.settings);
+  if (backup.inventory) await saveStore("inventory", backup.inventory);
+  await saveStore("reviews", backup.reviews);
+  await saveStore("ai_reviews", backup.aiReviews);
+  return {
+    totalVideos: backup.inventory?.totalVideos || backup.inventory?.videos?.length || 0,
+    totalSizeHuman: backup.inventory?.totalSizeHuman || "0 B",
+    hasSettings: Boolean(backup.settings),
+    reviews: Object.keys(backup.reviews || {}).length,
+    aiReviews: Object.keys(backup.aiReviews || {}).length,
+  };
 }
 
 function isUuid(value) {
@@ -645,6 +699,33 @@ const server = createServer(async (req, res) => {
         json(res, 400, { error: error.message });
       }
     });
+    return;
+  }
+  if (url.pathname === "/api/backup" && req.method === "GET") {
+    try {
+      const payload = await createBackupPayload();
+      const body = JSON.stringify(payload, null, 2);
+      const stamp = new Date().toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
+      res.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": Buffer.byteLength(body),
+        "cache-control": "no-store",
+        "content-disposition": `attachment; filename="footagex-backup-${stamp}.json"`,
+      });
+      res.end(body);
+    } catch (error) {
+      json(res, 500, { error: error.message });
+    }
+    return;
+  }
+  if (url.pathname === "/api/backup/import" && req.method === "POST") {
+    try {
+      const payload = await readJsonBody(req, 80_000_000);
+      const result = await importBackupPayload(payload);
+      json(res, 200, { ok: true, ...result });
+    } catch (error) {
+      json(res, 400, { error: error.message });
+    }
     return;
   }
   if (url.pathname === "/api/export") {
