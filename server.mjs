@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import mysql from "mysql2/promise";
 import { Readable } from "node:stream";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,19 @@ const reviewsPath = join(outputDir, "video_reviews.json");
 const aiReviewsPath = join(outputDir, "video_ai_reviews.json");
 const exportCsvPath = join(outputDir, "video_review_export.csv");
 const settingsPath = join(outputDir, "immich_settings.json");
+
+const defaultSettings = { immichBaseUrl: "", immichApiKey: "", dataSource: "local", openAiApiKey: "", openAiBaseUrl: "https://aiapi.zotpaper.cn/v1", openAiModel: "gpt-5.4-mini" };
+const dbConfig = {
+  host: process.env.DB_HOST || "mysql",
+  port: Number.parseInt(process.env.DB_PORT || "3306", 10),
+  database: process.env.DB_NAME || "footagex",
+  user: process.env.DB_USER || "footagex",
+  password: process.env.DB_PASSWORD || "footagex-password",
+  waitForConnections: true,
+  connectionLimit: 10,
+  namedPlaceholders: true,
+};
+const pool = mysql.createPool(dbConfig);
 
 mkdirSync(outputDir, { recursive: true });
 
@@ -45,35 +59,64 @@ function json(res, code, data) {
   res.end(body);
 }
 
-function loadInventory() {
-  if (!existsSync(inventoryPath)) {
-    return null;
-  }
-  return JSON.parse(readFileSync(inventoryPath, "utf-8"));
+function readJsonFile(path, fallback) {
+  if (!existsSync(path)) return fallback;
+  return JSON.parse(readFileSync(path, "utf-8"));
 }
 
-function loadReviews() {
-  if (!existsSync(reviewsPath)) {
-    return {};
-  }
-  return JSON.parse(readFileSync(reviewsPath, "utf-8"));
+async function initDatabase() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS kv_store (
+      id VARCHAR(64) PRIMARY KEY,
+      value JSON NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  const [[{ count }]] = await pool.query("SELECT COUNT(*) AS count FROM kv_store");
+  if (Number(count) > 0) return;
+  await saveStore("settings", readJsonFile(settingsPath, defaultSettings));
+  const inventory = readJsonFile(inventoryPath, null);
+  if (inventory) await saveStore("inventory", inventory);
+  await saveStore("reviews", readJsonFile(reviewsPath, {}));
+  await saveStore("ai_reviews", readJsonFile(aiReviewsPath, {}));
+  console.log("Imported local JSON runtime data into MySQL");
 }
 
-function loadAiReviews() {
-  if (!existsSync(aiReviewsPath)) {
-    return {};
-  }
-  return JSON.parse(readFileSync(aiReviewsPath, "utf-8"));
+async function loadStore(id, fallback) {
+  const [rows] = await pool.query("SELECT value FROM kv_store WHERE id = ?", [id]);
+  if (!rows.length) return fallback;
+  return typeof rows[0].value === "string" ? JSON.parse(rows[0].value) : rows[0].value;
 }
 
-function loadSettings() {
-  if (!existsSync(settingsPath)) {
-    return { immichBaseUrl: "", immichApiKey: "", dataSource: "local", openAiApiKey: "", openAiBaseUrl: "https://aiapi.zotpaper.cn/v1", openAiModel: "gpt-5.4-mini" };
-  }
-  return JSON.parse(readFileSync(settingsPath, "utf-8"));
+async function saveStore(id, value) {
+  await pool.query(
+    "INSERT INTO kv_store (id, value) VALUES (?, CAST(? AS JSON)) ON DUPLICATE KEY UPDATE value = VALUES(value)",
+    [id, JSON.stringify(value)]
+  );
+  return value;
 }
 
-function publicSettings(settings = loadSettings()) {
+async function loadInventory() {
+  return loadStore("inventory", null);
+}
+
+async function saveInventory(inventory) {
+  return saveStore("inventory", inventory);
+}
+
+async function loadReviews() {
+  return loadStore("reviews", {});
+}
+
+async function loadAiReviews() {
+  return loadStore("ai_reviews", {});
+}
+
+async function loadSettings() {
+  return loadStore("settings", defaultSettings);
+}
+
+function publicSettings(settings = defaultSettings) {
   return {
     immichBaseUrl: settings.immichBaseUrl || "",
     hasImmichApiKey: Boolean(settings.immichApiKey),
@@ -84,8 +127,8 @@ function publicSettings(settings = loadSettings()) {
   };
 }
 
-function saveSettings(settings, { preserveSecret = true } = {}) {
-  const existing = loadSettings();
+async function saveSettings(settings, { preserveSecret = true } = {}) {
+  const existing = await loadSettings();
   const safeSettings = {
     immichBaseUrl: String(settings.immichBaseUrl || "").replace(/\/+$/, ""),
     immichApiKey: settings.immichApiKey || (preserveSecret ? existing.immichApiKey || "" : ""),
@@ -94,7 +137,7 @@ function saveSettings(settings, { preserveSecret = true } = {}) {
     openAiBaseUrl: String(settings.openAiBaseUrl || existing.openAiBaseUrl || "https://aiapi.zotpaper.cn/v1").replace(/\/+$/, ""),
     openAiModel: settings.openAiModel || existing.openAiModel || "gpt-5.4-mini",
   };
-  writeFileSync(settingsPath, JSON.stringify(safeSettings, null, 2), "utf-8");
+  await saveStore("settings", safeSettings);
   return safeSettings;
 }
 
@@ -115,9 +158,9 @@ function normalizeInventoryVideo(video, settings) {
   };
 }
 
-function mergedInventory() {
-  const inventory = loadInventory();
-  const settings = loadSettings();
+async function mergedInventory() {
+  const inventory = await loadInventory();
+  const settings = await loadSettings();
   if (!inventory) {
     return {
       root: "",
@@ -131,8 +174,8 @@ function mergedInventory() {
       videos: [],
     };
   }
-  const reviews = loadReviews();
-  const aiReviews = loadAiReviews();
+  const reviews = await loadReviews();
+  const aiReviews = await loadAiReviews();
   return {
     ...inventory,
     settings: publicSettings(settings),
@@ -147,9 +190,9 @@ function mergedInventory() {
   };
 }
 
-function saveReviews(reviews) {
-  writeFileSync(reviewsPath, JSON.stringify(reviews, null, 2), "utf-8");
-  writeExportCsv(reviews);
+async function saveReviews(reviews) {
+  await saveStore("reviews", reviews);
+  await writeExportCsv(reviews);
 }
 
 function csvCell(value) {
@@ -157,8 +200,8 @@ function csvCell(value) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-function writeExportCsv(reviews) {
-  const inventory = loadInventory();
+async function writeExportCsv(reviews) {
+  const inventory = await loadInventory();
   if (!inventory) return;
   const headers = [
     "id", "relativePath", "sizeHuman", "device", "event", "reviewStatus", "rating", "tags", "notes", "segments",
@@ -257,7 +300,7 @@ async function withImmichDetails(asset) {
 }
 
 async function immichFetch(path, options = {}) {
-  const settings = loadSettings();
+  const settings = await loadSettings();
   if (!settings.immichBaseUrl || !settings.immichApiKey) {
     throw new Error("Immich 地址或 API Key 未配置");
   }
@@ -277,7 +320,7 @@ async function immichFetch(path, options = {}) {
 }
 
 async function syncImmichVideos() {
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const videos = [];
   let page = 1;
   const size = 250;
@@ -310,8 +353,8 @@ async function syncImmichVideos() {
     errors: [],
     videos,
   };
-  writeFileSync(inventoryPath, JSON.stringify(inventory, null, 2), "utf-8");
-  saveSettings({ ...settings, dataSource: "immich" });
+  await saveInventory(inventory);
+  await saveSettings({ ...settings, dataSource: "immich" });
   return inventory;
 }
 
@@ -334,8 +377,8 @@ function sendStatic(req, res, pathname) {
   createReadStream(target).pipe(res);
 }
 
-function sendMedia(req, res, id) {
-  const inventory = loadInventory();
+async function sendMedia(req, res, id) {
+  const inventory = await loadInventory();
   const video = inventory?.videos.find((item) => item.id === id);
   if (!video) {
     json(res, 404, { error: "Video not found" });
@@ -436,11 +479,11 @@ function extractJson(text) {
   return JSON.parse(match[1] || match[2]);
 }
 
-function normalizeAiResult(result, video, frames) {
+async function normalizeAiResult(result, video, frames) {
   return {
     assetId: video.id,
     analyzedAt: new Date().toISOString(),
-    model: loadSettings().openAiModel || "gpt-5.4-mini",
+    model: (await loadSettings()).openAiModel || "gpt-5.4-mini",
     frameCount: frames.length,
     aiScore: Number(result.aiScore || 0),
     suggestedStatus: result.suggestedStatus || "cut",
@@ -453,7 +496,7 @@ function normalizeAiResult(result, video, frames) {
 }
 
 async function analyzeVideoWithOpenAI(video, frames) {
-  const settings = loadSettings();
+  const settings = await loadSettings();
   if (!settings.openAiApiKey) {
     throw new Error("OpenAI API Key 未配置");
   }
@@ -513,11 +556,11 @@ async function analyzeVideoWithOpenAI(video, frames) {
     || payload.output?.flatMap((item) => item.content || [])
       .map((item) => item.text || "")
       .join("\n");
-  return normalizeAiResult(extractJson(outputText), video, frames);
+  return await normalizeAiResult(extractJson(outputText), video, frames);
 }
 
 async function testOpenAIModel() {
-  const settings = loadSettings();
+  const settings = await loadSettings();
   if (!settings.openAiApiKey) {
     throw new Error("OpenAI API Key 未配置");
   }
@@ -556,7 +599,7 @@ async function testOpenAIModel() {
 async function handleAiAnalyze(req, res) {
   try {
     const body = await readJsonBody(req, 30_000_000);
-    const inventory = loadInventory();
+    const inventory = await loadInventory();
     const video = inventory?.videos.find((item) => item.id === body.id || item.immichAssetId === body.id);
     if (!video) {
       json(res, 404, { error: "Video not found" });
@@ -564,19 +607,19 @@ async function handleAiAnalyze(req, res) {
     }
     const frames = Array.isArray(body.frames) ? body.frames.slice(0, 24) : [];
     const result = await analyzeVideoWithOpenAI(video, frames);
-    const aiReviews = loadAiReviews();
+    const aiReviews = await loadAiReviews();
     aiReviews[video.id] = result;
-    writeFileSync(aiReviewsPath, JSON.stringify(aiReviews, null, 2), "utf-8");
-    json(res, 200, { ok: true, result, aiReviewsPath });
+    await saveStore("ai_reviews", aiReviews);
+    json(res, 200, { ok: true, result });
   } catch (error) {
     json(res, 502, { error: error.message });
   }
-}
+ }
 
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname === "/api/inventory") {
-    const inventory = mergedInventory();
+    const inventory = await mergedInventory();
     json(res, 200, inventory);
     return;
   }
@@ -586,17 +629,17 @@ const server = createServer((req, res) => {
       body += chunk;
       if (body.length > 10_000_000) req.destroy();
     });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
         const payload = JSON.parse(body || "{}");
-        const reviews = loadReviews();
+        const reviews = await loadReviews();
         const current = reviews[payload.id] || {};
         reviews[payload.id] = {
           ...current,
           ...payload.review,
           updatedAt: new Date().toISOString(),
         };
-        saveReviews(reviews);
+        await saveReviews(reviews);
         json(res, 200, { ok: true, review: reviews[payload.id], exportCsvPath });
       } catch (error) {
         json(res, 400, { error: error.message });
@@ -605,11 +648,11 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/export") {
-    json(res, 200, { reviewsPath, exportCsvPath, settingsPath });
+    json(res, 200, { storage: "mysql", exportCsvPath });
     return;
   }
   if (url.pathname === "/api/settings" && req.method === "GET") {
-    json(res, 200, publicSettings());
+    json(res, 200, publicSettings(await loadSettings()));
     return;
   }
   if (url.pathname === "/api/settings" && req.method === "POST") {
@@ -618,9 +661,9 @@ const server = createServer((req, res) => {
       body += chunk;
       if (body.length > 1_000_000) req.destroy();
     });
-    req.on("end", () => {
+    req.on("end", async () => {
       try {
-        const settings = saveSettings(JSON.parse(body || "{}"));
+        const settings = await saveSettings(JSON.parse(body || "{}"));
         json(res, 200, { ok: true, settings: publicSettings(settings) });
       } catch (error) {
         json(res, 400, { error: error.message });
@@ -662,13 +705,22 @@ const server = createServer((req, res) => {
     return;
   }
   sendStatic(req, res, url.pathname);
-});
+ });
 
 const port = Number.parseInt(process.env.PORT || "5173", 10);
 const host = process.env.HOST || "127.0.0.1";
-server.listen(port, host, () => {
-  const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
-  console.log(`Video workbench: http://${displayHost}:${port}`);
-  console.log(`Listening on: ${host}:${port}`);
-  console.log(`Inventory: ${inventoryPath}`);
+
+async function start() {
+  await initDatabase();
+  server.listen(port, host, () => {
+    const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
+    console.log(`Video workbench: http://${displayHost}:${port}`);
+    console.log(`Listening on: ${host}:${port}`);
+    console.log(`Storage: mysql://${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
+  });
+}
+
+start().catch((error) => {
+  console.error(error);
+  process.exit(1);
 });

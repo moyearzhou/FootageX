@@ -35,13 +35,13 @@ Then configure:
 
 Click `同步 Immich 视频` after saving the Immich settings. A fresh clone starts with an empty local inventory by design.
 
-Runtime data is written to:
+Runtime data is stored in the Docker Compose MySQL volume:
 
 ```text
-outputs/video_workbench/
+footagex_mysql-data
 ```
 
-This directory is intentionally ignored by git because it may contain API keys, local inventories, review data, and media metadata.
+On first startup, FootageX imports legacy local JSON files from `outputs/video_workbench/` into MySQL if the database is empty. The `outputs/` directory is still ignored by git because it may contain old API keys, inventories, review data, CSV exports, and media metadata.
 
 
 ## Docker Compose Deployment
@@ -60,13 +60,13 @@ Open:
 http://<your-host-ip>:5173
 ```
 
-Runtime data is persisted on the host at:
+Runtime data is persisted in the named MySQL volume:
 
 ```text
-./outputs/video_workbench/
+footagex_mysql-data
 ```
 
-This folder stores local settings, API keys, Immich inventory, AI reviews, manual review states, and CSV exports. It is mounted into the container as `/app/outputs` and is intentionally ignored by git.
+The app stores settings, API keys, Immich inventory, AI reviews, and manual review states in MySQL. `./outputs/video_workbench/` is mounted only for legacy JSON import and CSV export compatibility, and remains ignored by git.
 
 Useful commands:
 
@@ -74,6 +74,12 @@ Useful commands:
 docker compose logs -f
 docker compose restart
 docker compose down
+```
+
+To remove the app and delete the MySQL data volume, run:
+
+```bash
+docker compose down -v
 ```
 
 If Docker Hub is slow or blocked, create a `.env` file and point `NODE_IMAGE` to a reachable Node 20 Alpine mirror:
