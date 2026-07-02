@@ -391,6 +391,7 @@ function addSegment() {
 }
 
 async function init() {
+  el.searchInput.value = "";
   const response = await fetch("/api/inventory");
   if (!response.ok) {
     const error = await response.json();
