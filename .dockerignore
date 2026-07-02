@@ -1,0 +1,11 @@
+.git
+.idea
+.DS_Store
+node_modules
+npm-debug.log*
+outputs
+work
+video-workbench
+*.local
+__pycache__
+*.pyc

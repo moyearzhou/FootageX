@@ -14,6 +14,7 @@
             <h1>视频整理</h1>
             <p id="scanMeta">加载中</p>
           </div>
+          <button id="openSettingsBtn" class="iconButton" type="button" aria-label="打开设置" title="设置">设置</button>
         </div>
 
         <div class="stats">
@@ -84,39 +85,13 @@
         </section>
 
         <section class="review">
-          <div class="immichPanel">
-            <div class="reviewHeader">
-              <h3>Immich 素材库</h3>
-              <span id="immichState">未配置</span>
-            </div>
-            <label class="notesLabel" for="immichBaseUrlInput">Immich 地址</label>
-            <input id="immichBaseUrlInput" type="url" placeholder="http://nas.local:2283" />
-            <label class="notesLabel" for="immichApiKeyInput">API Key</label>
-            <input id="immichApiKeyInput" type="password" placeholder="只保存在本地工作区" />
-            <div class="immichActions">
-              <button id="saveImmichBtn" type="button">保存配置</button>
-              <button id="syncImmichBtn" type="button">同步 Immich 视频</button>
-            </div>
-            <button id="openSavedImmichBtn" type="button">在 Immich 打开当前视频</button>
-          </div>
-
           <div class="aiPanel">
             <div class="reviewHeader">
               <h3>AI 分析</h3>
               <span id="aiState">未分析</span>
             </div>
-            <label class="notesLabel" for="openAiApiKeyInput">OpenAI API Key</label>
-            <input id="openAiApiKeyInput" type="password" placeholder="只保存在本地工作区" />
-            <label class="notesLabel" for="openAiBaseUrlInput">OpenAI Base URL</label>
-            <input id="openAiBaseUrlInput" type="url" placeholder="https://aiapi.zotpaper.cn/v1" />
-            <label class="notesLabel" for="openAiModelInput">模型</label>
-            <input id="openAiModelInput" type="text" placeholder="gpt-5.4-mini" />
-            <div class="immichActions">
-              <button id="saveOpenAiBtn" type="button">保存 Key</button>
-              <button id="testOpenAiBtn" type="button">检测模型</button>
-            </div>
-            <div class="immichActions">
-              <button id="analyzeCurrentBtn" type="button">AI 分析当前视频</button>
+            <div class="singleAction">
+              <button id="analyzeCurrentBtn" class="primary" type="button">AI 分析当前视频</button>
             </div>
             <div id="aiResult" class="aiResult">
               <div class="empty">当前视频还没有 AI 分析结果</div>
@@ -157,6 +132,53 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div id="settingsModal" class="modalOverlay" hidden>
+      <div class="settingsDialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settingsHeader">
+          <div>
+            <h2 id="settingsTitle">设置</h2>
+            <p>连接素材库和 AI 服务</p>
+          </div>
+          <button id="closeSettingsBtn" class="iconButton" type="button" aria-label="关闭设置" title="关闭">关闭</button>
+        </div>
+
+        <div class="settingsBody">
+          <section class="settingsSection">
+            <div class="settingsSectionHeader">
+              <h3>Immich 素材库</h3>
+              <span id="immichState">未配置</span>
+            </div>
+            <label class="notesLabel" for="immichBaseUrlInput">Immich 地址</label>
+            <input id="immichBaseUrlInput" type="url" placeholder="http://nas.local:2283" />
+            <label class="notesLabel" for="immichApiKeyInput">API Key</label>
+            <input id="immichApiKeyInput" type="password" placeholder="只保存在本地工作区" />
+            <div class="settingsActions">
+              <button id="saveImmichBtn" type="button">保存配置</button>
+              <button id="syncImmichBtn" type="button">同步 Immich 视频</button>
+            </div>
+            <button id="openSavedImmichBtn" type="button">在 Immich 打开当前视频</button>
+          </section>
+
+          <section class="settingsSection">
+            <div class="settingsSectionHeader">
+              <h3>OpenAI 兼容接口</h3>
+              <span id="settingsAiState">未配置</span>
+            </div>
+            <label class="notesLabel" for="openAiApiKeyInput">OpenAI API Key</label>
+            <input id="openAiApiKeyInput" type="password" placeholder="只保存在本地工作区" />
+            <label class="notesLabel" for="openAiBaseUrlInput">OpenAI Base URL</label>
+            <input id="openAiBaseUrlInput" type="url" placeholder="https://aiapi.zotpaper.cn/v1" />
+            <label class="notesLabel" for="openAiModelInput">模型</label>
+            <input id="openAiModelInput" type="text" placeholder="gpt-5.4-mini" />
+            <div class="settingsActions">
+              <button id="saveOpenAiBtn" type="button">保存 Key</button>
+              <button id="testOpenAiBtn" type="button">检测模型</button>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
     <script src="/app.js" type="module"></script>
   </body>

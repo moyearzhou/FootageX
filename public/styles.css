@@ -73,6 +73,10 @@ button.primary {
 }
 
 .brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
   padding: 18px 16px 12px;
 }
 
@@ -135,7 +139,7 @@ button.primary {
 
 .control input,
 .control select,
-.immichPanel input,
+.settingsSection input,
 textarea,
 .segmentItem input {
   width: 100%;
@@ -149,7 +153,7 @@ textarea,
 
 .control input:focus,
 .control select:focus,
-.immichPanel input:focus,
+.settingsSection input:focus,
 textarea:focus,
 .segmentItem input:focus {
   background: #fff;
@@ -348,22 +352,111 @@ video {
   text-align: center;
 }
 
+.iconButton {
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 15, 15, 0.18);
+}
+
+.modalOverlay[hidden] {
+  display: none;
+}
+
+.settingsDialog {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(15, 15, 15, 0.18);
+}
+
+.settingsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.settingsHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.settingsHeader p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settingsBody {
+  display: grid;
+  gap: 0;
+  max-height: calc(100vh - 142px);
+  overflow: auto;
+}
+
+.settingsSection {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.settingsSection:last-child {
+  border-bottom: 0;
+}
+
+.settingsSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.settingsSection h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.settingsSection input {
+  margin-bottom: 10px;
+}
+
 .review {
   padding: 0;
 }
 
-.immichPanel,
 .aiPanel {
   margin-bottom: 18px;
   padding-bottom: 18px;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.immichActions {
+.singleAction,
+.settingsActions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
   margin: 8px 0 10px;
+}
+
+.singleAction {
+  grid-template-columns: 1fr;
 }
 
 .reviewHeader,
@@ -382,6 +475,7 @@ video {
 
 #saveState,
 #immichState,
+#settingsAiState,
 #aiState {
   color: var(--muted-light);
   font-size: 12px;

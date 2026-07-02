@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -96,6 +97,23 @@ function saveSettings(settings, { preserveSecret = true } = {}) {
   return safeSettings;
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function normalizeInventoryVideo(video, settings) {
+  const looksLikeImmich = video.source === "immich"
+    || Boolean(video.immichAssetId)
+    || (settings.dataSource === "immich" && isUuid(video.id));
+  if (!looksLikeImmich) return video;
+  return {
+    ...video,
+    source: "immich",
+    immichAssetId: video.immichAssetId || video.id,
+    immichAssetPath: video.immichAssetPath || video.path || "",
+  };
+}
+
 function mergedInventory() {
   const inventory = loadInventory();
   const settings = loadSettings();
@@ -117,11 +135,14 @@ function mergedInventory() {
   return {
     ...inventory,
     settings: publicSettings(settings),
-    videos: inventory.videos.map((video) => ({
-      ...video,
-      aiReview: aiReviews[video.id] || aiReviews[video.immichAssetId] || null,
-      ...(reviews[video.id] || {}),
-    })),
+    videos: inventory.videos.map((video) => {
+      const normalized = normalizeInventoryVideo(video, settings);
+      return {
+        ...normalized,
+        aiReview: aiReviews[normalized.id] || aiReviews[normalized.immichAssetId] || null,
+        ...(reviews[normalized.id] || {}),
+      };
+    }),
   };
 }
 
@@ -374,18 +395,7 @@ async function proxyImmichAsset(req, res, id, kind) {
       res.end();
       return;
     }
-    const reader = upstream.body.getReader();
-    const pump = async () => {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(Buffer.from(value));
-      }
-      res.end();
-    };
-    pump().catch((error) => {
-      res.destroy(error);
-    });
+    Readable.fromWeb(upstream.body).pipe(res);
   } catch (error) {
     json(res, 502, { error: error.message });
   }
@@ -651,7 +661,10 @@ const server = createServer((req, res) => {
 });
 
 const port = Number.parseInt(process.env.PORT || "5173", 10);
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Video workbench: http://127.0.0.1:${port}`);
+const host = process.env.HOST || "127.0.0.1";
+server.listen(port, host, () => {
+  const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
+  console.log(`Video workbench: http://${displayHost}:${port}`);
+  console.log(`Listening on: ${host}:${port}`);
   console.log(`Inventory: ${inventoryPath}`);
 });

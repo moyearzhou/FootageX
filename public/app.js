@@ -9,6 +9,9 @@ const state = {
 
 const el = {
   scanMeta: document.querySelector("#scanMeta"),
+  openSettingsBtn: document.querySelector("#openSettingsBtn"),
+  closeSettingsBtn: document.querySelector("#closeSettingsBtn"),
+  settingsModal: document.querySelector("#settingsModal"),
   totalVideos: document.querySelector("#totalVideos"),
   totalSize: document.querySelector("#totalSize"),
   reviewedCount: document.querySelector("#reviewedCount"),
@@ -49,6 +52,7 @@ const el = {
   testOpenAiBtn: document.querySelector("#testOpenAiBtn"),
   analyzeCurrentBtn: document.querySelector("#analyzeCurrentBtn"),
   aiState: document.querySelector("#aiState"),
+  settingsAiState: document.querySelector("#settingsAiState"),
   aiResult: document.querySelector("#aiResult"),
 };
 
@@ -85,6 +89,10 @@ function immichBaseUrl() {
   return String(state.settings.immichBaseUrl || "").replace(/\/+$/, "");
 }
 
+function isImmichVideo(video) {
+  return video?.source === "immich" || Boolean(video?.immichAssetId);
+}
+
 function renderImmich(video) {
   const base = immichBaseUrl();
   el.immichBaseUrlInput.value = base;
@@ -101,6 +109,7 @@ function renderAi(video) {
   el.openAiBaseUrlInput.value = state.settings.openAiBaseUrl || "https://aiapi.zotpaper.cn/v1";
   el.openAiModelInput.value = state.settings.openAiModel || "gpt-5.4-mini";
   el.openAiApiKeyInput.placeholder = state.settings.hasOpenAiApiKey ? "已保存，留空则沿用" : "只保存在本地工作区";
+  el.settingsAiState.textContent = state.settings.hasOpenAiApiKey ? `已配置 · ${state.settings.openAiModel || "模型"}` : "未配置";
   el.analyzeCurrentBtn.disabled = !state.settings.hasOpenAiApiKey || !video;
   el.testOpenAiBtn.disabled = !state.settings.hasOpenAiApiKey;
   if (!result) {
@@ -125,6 +134,16 @@ function renderAi(video) {
     <div class="aiBlock"><h4>推荐保留片段</h4><ul>${keepSegments || "<li>暂无</li>"}</ul></div>
     <div class="aiBlock"><h4>待删观察片段</h4><ul>${deleteSegments || "<li>暂无</li>"}</ul></div>
   `;
+}
+
+function openSettings() {
+  el.settingsModal.hidden = false;
+  el.immichBaseUrlInput.focus();
+}
+
+function closeSettings() {
+  el.settingsModal.hidden = true;
+  el.openSettingsBtn.focus();
 }
 
 function reviewPatch(video, patch) {
@@ -234,7 +253,7 @@ function unloadVideo() {
 
 async function loadVideoForCurrent() {
   if (!state.current) throw new Error("请先选择一个视频");
-  const src = state.current.source === "immich"
+  const src = isImmichVideo(state.current)
     ? `/immich/media/${encodeURIComponent(state.current.immichAssetId || state.current.id)}`
     : `/media/${encodeURIComponent(state.current.id)}`;
   if (el.player.getAttribute("src") !== src) {
@@ -393,7 +412,7 @@ async function init() {
   } else {
     state.current = null;
     el.videoTitle.textContent = "还没有视频";
-    el.videoPath.textContent = "在右侧填写 Immich 地址和 API Key，然后点击“同步 Immich 视频”。";
+    el.videoPath.textContent = "点击左侧设置，填写 Immich 地址和 API Key，然后同步视频。";
     el.videoSize.textContent = "0 B";
     el.videoEvent.textContent = "待同步";
     el.videoDevice.textContent = "Immich";
@@ -405,6 +424,15 @@ async function init() {
     renderAi(null);
   }
 }
+
+el.openSettingsBtn.addEventListener("click", openSettings);
+el.closeSettingsBtn.addEventListener("click", closeSettings);
+el.settingsModal.addEventListener("click", (event) => {
+  if (event.target === el.settingsModal) closeSettings();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !el.settingsModal.hidden) closeSettings();
+});
 
 [el.searchInput, el.deviceFilter, el.statusFilter, el.sortMode].forEach((input) => {
   input.addEventListener("input", applyFilters);
@@ -529,22 +557,22 @@ el.saveOpenAiBtn.addEventListener("click", async () => {
     const payload = await response.json();
     state.settings = payload.settings;
     el.openAiApiKeyInput.value = "";
-    el.aiState.textContent = "已保存";
+    el.settingsAiState.textContent = "已保存";
   } else {
-    el.aiState.textContent = "保存失败";
+    el.settingsAiState.textContent = "保存失败";
   }
   renderAi(state.current);
 });
 
 el.testOpenAiBtn.addEventListener("click", async () => {
-  el.aiState.textContent = "检测中";
+  el.settingsAiState.textContent = "检测中";
   el.testOpenAiBtn.disabled = true;
   const response = await fetch("/api/ai/test", { method: "POST" });
   const payload = await response.json().catch(() => ({}));
   if (response.ok) {
-    el.aiState.textContent = `可用 · ${payload.model}`;
+    el.settingsAiState.textContent = `可用 · ${payload.model}`;
   } else {
-    el.aiState.textContent = "检测失败";
+    el.settingsAiState.textContent = "检测失败";
     el.aiResult.innerHTML = `<div class="empty">${payload.error || "模型不可用"}</div>`;
   }
   el.testOpenAiBtn.disabled = !state.settings.hasOpenAiApiKey;
@@ -577,15 +605,17 @@ el.analyzeCurrentBtn.addEventListener("click", async () => {
 el.syncImmichBtn.addEventListener("click", async () => {
   el.immichState.textContent = "同步中";
   el.syncImmichBtn.disabled = true;
-  const response = await fetch("/api/immich/sync", { method: "POST" });
-  if (!response.ok) {
+  try {
+    const response = await fetch("/api/immich/sync", { method: "POST" });
     const payload = await response.json().catch(() => ({}));
-    el.immichState.textContent = payload.error || "同步失败";
-    el.syncImmichBtn.disabled = false;
-    return;
+    if (!response.ok) throw new Error(payload.error || "同步失败");
+    await init();
+    el.immichState.textContent = `同步完成 · ${Number(payload.totalVideos || 0).toLocaleString("zh-CN")} 个 · ${payload.totalSizeHuman || "0 B"}`;
+  } catch (error) {
+    el.immichState.textContent = error.message || "同步失败";
+  } finally {
+    el.syncImmichBtn.disabled = !immichBaseUrl() || !state.settings.hasImmichApiKey;
   }
-  await init();
-  el.immichState.textContent = "同步完成";
 });
 
 el.openSavedImmichBtn.addEventListener("click", () => {

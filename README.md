@@ -43,6 +43,56 @@ outputs/video_workbench/
 
 This directory is intentionally ignored by git because it may contain API keys, local inventories, review data, and media metadata.
 
+
+## Docker Compose Deployment
+
+Use this when deploying FootageX on another machine or NAS with Docker.
+
+```bash
+git clone git@github.com:moyearzhou/FootageX.git
+cd FootageX
+docker compose up -d --build
+```
+
+Open:
+
+```text
+http://<your-host-ip>:5173
+```
+
+Runtime data is persisted on the host at:
+
+```text
+./outputs/video_workbench/
+```
+
+This folder stores local settings, API keys, Immich inventory, AI reviews, manual review states, and CSV exports. It is mounted into the container as `/app/outputs` and is intentionally ignored by git.
+
+Useful commands:
+
+```bash
+docker compose logs -f
+docker compose restart
+docker compose down
+```
+
+If Docker Hub is slow or blocked, create a `.env` file and point `NODE_IMAGE` to a reachable Node 20 Alpine mirror:
+
+```bash
+cp .env.example .env
+# Edit NODE_IMAGE in .env, for example: NODE_IMAGE=<your-registry-mirror>/library/node:20-alpine
+docker compose up -d --build
+```
+
+To change the external port, edit `compose.yaml`:
+
+```yaml
+ports:
+  - "5174:5173"
+```
+
+Then open `http://<your-host-ip>:5174`.
+
 ## Fresh Clone Checklist
 
 FootageX can start immediately on another device, but it cannot know your private services until you configure them.

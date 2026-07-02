@@ -1,0 +1,18 @@
+name: footagex
+
+services:
+  footagex:
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
+    image: footagex:local
+    container_name: footagex
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5173
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./outputs:/app/outputs
+    restart: unless-stopped
