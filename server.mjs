@@ -40,6 +40,7 @@ function json(res, code, data) {
   res.writeHead(code, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
+    "cache-control": "no-store",
   });
   res.end(body);
 }
@@ -326,7 +327,10 @@ function sendStatic(req, res, pathname) {
     return;
   }
   const mime = mimeTypes[extname(target).toLowerCase()] || "application/octet-stream";
-  res.writeHead(200, { "content-type": mime });
+  res.writeHead(200, {
+    "content-type": mime,
+    "cache-control": "no-store",
+  });
   createReadStream(target).pipe(res);
 }
 
